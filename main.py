@@ -44,22 +44,37 @@ def augmentacija(img):
     img = tf.image.random_contrast(img, lower=0.8, upper=1.2)
     return img
 
-def data_generator(image_paths, labels, batch_size, num_classes, augment=False, shuffle=True):
-    idxs = np.arange(len(image_paths))
+def generator(image_paths, labels, batch_size, num_classes, augment=False, shuffle=True):
+    #ustvari seznam indeksov slik (0, 1, 2, ..., n-1)
+    ids = np.arange(len(image_paths))
+
+    #generator dela v neskončni zanki, da lahko model dobi podatke večkrat (več epoh)
     while True:
+        #če je shuffle=True, premešaj indekse, da bodo slike v naključnem vrstnem redu
         if shuffle:
-            np.random.shuffle(idxs)
+            np.random.shuffle(ids)
+        #po korakih po batch_size vzemi koščke indeksov
         for i in range(0, len(image_paths), batch_size):
-            batch_idxs = idxs[i:i + batch_size]
-            batch_images = []
-            batch_labels = []
+
+            #izbere trenutno skupino indeksov za batch
+            batch_idxs = ids[i:i + batch_size]
+            batch_images = []  #sem bo shranilo slike za trenutni batch
+            batch_labels = []   #sem bom shranilo oznake za trenutni batch
+
+            #za vsak indeks iz batcha naloži in predela sliko ter oznako
             for j in batch_idxs:
+                #naloži sliko z določeno velikostjo (npr. 64x64)
                 img = load_img(image_paths[j], target_size=IMAGE_SIZE)
+                #pretvori sliko v številčno matriko (array) in normaliziraj vrednosti v [0,1]
                 img = img_to_array(img) / 255.0
                 if augment:
+                    #uporabi naključne spremembe na sliki (flip, svetlost, kontrast)
                     img = augmentacija(tf.convert_to_tensor(img))
+                    #poskrbi, da so vrednosti ostale med 0 in 1 in pretvori nazaj v numpy array
                     img = tf.clip_by_value(img, 0.0, 1.0).numpy()
+                #doda predelano sliko v batch
                 batch_images.append(img)
+                #dodaj ustrezno oznako v batch
                 batch_labels.append(labels[j])
             batch_labels_onehot = utils.to_categorical(batch_labels, num_classes=num_classes)
             yield np.array(batch_images), batch_labels_onehot
@@ -113,8 +128,8 @@ def treniraj_in_prikazi(mapa_slik, velikost_slike, kernel_sizes, epochs=EPOCHS, 
         print(f"\nTreniranje modela s kernel velikostjo {ks}x{ks}")
         model = ustvari_model(velikost_slike, st_razredov, kernel_size=ks)
 
-        train_gen = data_generator(X_train, y_train, batch_size, st_razredov, augment=True)
-        val_gen = data_generator(X_val, y_val, batch_size, st_razredov, augment=False, shuffle=False)
+        train_gen = generator(X_train, y_train, batch_size, st_razredov, augment=True)
+        val_gen = generator(X_val, y_val, batch_size, st_razredov, augment=False, shuffle=False)
 
         history = model.fit(
             train_gen,
